@@ -8,7 +8,6 @@ jobs:
          steps:
          - name: Code Checkout
            uses: actions/checkout@v4
-
          - name: "Configure AWS Credentials"
            uses: aws-actions/configure-aws-credentials@v4.1.0           
            with:   
@@ -18,10 +17,11 @@ jobs:
 
       build-and-push-pub-ecr:
             runs-on: ubuntu-latest
+            needs:
+                  login-to-aws:
             steps:
             - name: Code Checkout
               uses: actions/checkout@v4
-
             - name: "Login to AWSECR"
               uses: docker/login-action@v3.4.0
               with:
@@ -33,8 +33,9 @@ jobs:
             - name: Build Image
               run:
                 docker build -t ecommrepo .
-                docker tag ecommrepo:latest 392848575587.dkr.ecr.ap-south-1.amazonaws.com/ecommrepo:${BUILD_ID}
-                docker push 392848575587.dkr.ecr.ap-south-1.amazonaws.com/ecommrepo:${BUILD_ID}
+                docker tag ecommrepo:latest 392848575587.dkr.ecr.ap-south-1.amazonaws.com/ecommrepo:v1
+                docker push 392848575587.dkr.ecr.ap-south-1.amazonaws.com/ecommrepo:v1
+              
 
 
             
