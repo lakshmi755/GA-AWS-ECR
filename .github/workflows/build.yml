@@ -1,43 +1,58 @@
-name: Build to AWS ECR
+name: Build and Push Docker Image to Docker Hub and ECR
+
 on:
   push:
-    branches: [main]
+    branches:
+      - master
+      - main
+
 jobs:
-      login-to-aws:
-         runs-on: ubuntu-latest
-         steps:
-         - name: Code Checkout
-           uses: actions/checkout@v4
-         - name: "Configure AWS Credentials"
-           uses: aws-actions/configure-aws-credentials@v4.1.0           
-           with:   
-            aws-access-key-id: ${{ secrets.ACCESS_KEY }}
-            aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
-            aws-region: ${{ secrets.REGION }}
+  build-and-push:
+    runs-on: ubuntu-latest
 
-      build-and-push-pub-ecr:
-            runs-on: ubuntu-latest
-            needs:
-                  login-to-aws
-            steps:
-            - name: Code Checkout
-              uses: actions/checkout@v4
-            - name: "Login to AWSECR"
-              uses: docker/login-action@v3.4.0
-              with:
-               registry: 392848575587.dkr.ecr.ap-south-1.amazonaws.com
-               username: ${{ secrets.ACCESS_KEY }}
-               password: ${{ secrets.SECRET_ACCESS_KEY }}
-              env:
-               aws-region: ${{ secrets.REGION }}
-            - name: Build Image
-              run:
-                docker build -t ecommrepo .
-                docker tag myimage:latest 392848575587.dkr.ecr.ap-south-1.amazonaws.com/myimage:v1
-                docker push 392848575587.dkr.ecr.ap-south-1.amazonaws.com/myimage:v1
-              
+    env:
+      IMAGE_NAME: myimage
 
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
 
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker tags
+        id: vars
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+        run: |
+          TAG=myapps
+          DOCKER_IMAGE=${DOCKERHUB_USERNAME}/${IMAGE_NAME}:$TAG
+          ECR_IMAGE=${ECR_REGISTRY}/${ECR_REPOSITORY}:$TAG
+          echo "docker_image=$DOCKER_IMAGE" >> $GITHUB_OUTPUT
+          echo "ecr_image=$ECR_IMAGE" >> $GITHUB_OUTPUT
+
+      - name: Build multi-stage Docker image
+        run: |
+          docker build -t ${{ steps.vars.outputs.docker_image }} -t ${{ steps.vars.outputs.ecr_image }} .
+
+      - name: Push to Docker Hub
+        run: docker push ${{ steps.vars.outputs.docker_image }}
+
+      - name: Push to Amazon ECR
+        run: docker push ${{ steps.vars.outputs.ecr_image }}
